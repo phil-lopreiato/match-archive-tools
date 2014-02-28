@@ -94,7 +94,7 @@ def generate_csv(matchKeys,urls):
         writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
         for title,url in zip(matchKeys,urls):
             year = str(title)[:4]
-            split=re.split("_","2014ctgro_qm1")
+            split=re.split("_",title)
             event = str(split[0])[4:]
             if "qm" in split[1]:
                 matchType = "q"
