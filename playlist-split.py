@@ -26,7 +26,7 @@ from optparse import OptionParser
 # For more information about the client_secrets.json file format, please visit:
 #   https://developers.google.com/api-client-library/python/guide/aaa_client_secrets
 # Please ensure that you have enabled the YouTube Data API for your project.
-CLIENT_SECRETS_FILE = "../client_secrets.json"
+CLIENT_SECRETS_FILE = "../client-secret-match_splitter.json"
 
 # An OAuth 2 access scope that allows for full read/write access.
 YOUTUBE_SCOPE = "https://www.googleapis.com/auth/youtube"
@@ -104,23 +104,10 @@ def process_titles(titles,urls,options):
         writer = csv.writer(csvfile, delimiter=' ',quotechar='|', quoting=csv.QUOTE_MINIMAL)
         for title,url in zip(titles,urls):
             print title
-            expl = re.split("\s",title)
-            '''if expl[0]==eventKey:
-                valid=False
-                if(p.match(expl[1])):
-                    #qual match
-                    matchType="q"
-                    matchNum=expl[1]
-                    valid=True
-                else:
-                    matchType=str(expl[1]).lower()+str(expl[2])[:1]
-                    matchNum=str(expl[2])[2:]
-                    valid=True'''
-            matchType="q"
-            matchNum=expl[5]
-            valid=True
-            if(valid):
-                writer.writerow([year,event,matchType,matchNum,"http://www.youtube.com/watch?v="+url])
+  	    expl = re.split("\s",title)
+            matchType = "q"
+	    matchNum = expl[1][2:4]
+	    writer.writerow([year,event,matchType,matchNum,"http://www.youtube.com/watch?v="+url])
 
 def process_playlist(options):
     youtube = get_authenticated_service()

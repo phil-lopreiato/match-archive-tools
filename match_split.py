@@ -50,7 +50,7 @@ CLIENT_SECRETS_FILE = "../client-secret-match_splitter.json"
 
 # This OAuth 2.0 access scope allows an application to upload files to the
 # authenticated user's YouTube channel, but doesn't allow other types of access.
-YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+YOUTUBE_READ_WRITE_SCOPE = "https://www.googleapis.com/auth/youtube"
 YOUTUBE_API_SERVICE_NAME = "youtube"
 YOUTUBE_API_VERSION = "v3"
 
@@ -77,7 +77,7 @@ VALID_PRIVACY_STATUSES = ("public", "private", "unlisted")
 
 def get_authenticated_service(args):
   flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE,
-    scope=YOUTUBE_UPLOAD_SCOPE,
+    scope=YOUTUBE_READ_WRITE_SCOPE,
     message=MISSING_CLIENT_SECRETS_MESSAGE)
 
   storage = Storage("%s-oauth2.json" % sys.argv[0])
@@ -89,37 +89,60 @@ def get_authenticated_service(args):
   return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
     http=credentials.authorize(httplib2.Http()))
 
-def generate_csv(matchKeys,urls):
-    with open('uploads.csv', 'wb') as csvfile:
-        writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        for title,url in zip(matchKeys,urls):
-            year = str(title)[:4]
-            split=re.split("_",title)
-            event = str(split[0])[4:]
-            if "qm" in split[1]:
-                matchType = "q"
-                matchNum = str(split[1])[2:]
-            elif "qf" in split[1] or "sf" in split[1]:
-                matchType = str(split[1])[:3]
-                matchNum = str(split[1])[4:]
-            else:
-                matchType = "f"
-                matchNum = str(split[1])[3:]
-            writer.writerow([year,event,matchType,matchNum,"http://www.youtube.com/watch?v="+url])
-    print "Data Written to ./uploads.csv for copy/paste into TBA spreadsheet"
+def add_to_playlist(youtube, video, playlist):
+      	channels_list_response = youtube.channels().list(
+    		mine=True,
+    		part="contentDetails"
+  		).execute()
 
-def initialize_upload(youtube, videos):
+ 	body = dict(
+ 	   snippet=dict(
+      	      playlistId=playlist,
+      	      resourceId=dict(
+       	         kind="youtube#video",
+       	         videoId=video
+      	      )
+    	   )
+  	)
+  	youtube.playlistItems().insert(
+    	   part=",".join(body.keys()),
+    	   body=body
+  	).execute()
+	print "Added "+video+" to playlist "+playlist
+	
+def add_to_csv(matchKey,url):
+    year = str(matchKey)[:4]
+    split=re.split("_",matchKey)
+    event = str(split[0])[4:]
+    filepath = event+"_matches.csv"
+    with open(filepath, 'a') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        if "qm" in split[1]:
+            matchType = "q"
+            matchNum = str(split[1])[2:]
+        elif "qf" in split[1] or "sf" in split[1]:
+            matchType = str(split[1])[:3]
+            matchNum = str(split[1])[4:]
+        else:
+            matchType = "f1"
+            matchNum = str(split[1])[3:]
+        writer.writerow([year,event,matchType,matchNum,"http://www.youtube.com/watch?v="+url])
+    print "Data for match "+matchKey+" appended to "+filepath
+
+def initialize_upload(youtube, videos,options):
     keys=[]
     urls=[]
     for video in videos:
+      youtube=get_authenticated_service(options)
       path = "./matches/"+video
       tags = None
+      print "uploading "+video
       vidTitle= os.path.splitext(video)[0].lower()
       tbaurl = "http://thebluealliance.com/match/"+vidTitle
       body = dict(
         snippet=dict(
           title=vidTitle,
-          description=tbaurl,
+          description=options.desc+"\n"+tbaurl,
           tags=tags
         ),
         status=dict(
@@ -148,8 +171,11 @@ def initialize_upload(youtube, videos):
       u = resumable_upload(insert_request)
       keys.append(vidTitle)
       urls.append(u)
-
-    generate_csv(keys,urls) 
+      
+      if(args.playlist!=""):
+	  add_to_playlist(youtube,u,args.playlist)
+      
+      add_to_csv(vidTitle,u) 
 
 # This method implements an exponential backoff strategy to resume a
 # failed upload.
@@ -189,20 +215,34 @@ def resumable_upload(insert_request):
 def split_video(options):
     if not os.path.exists("./matches"): os.mkdir("./matches")
     videos = []
-    ext = os.path.splitext(options.file)[-1].lower()
     over = ""
+    ext = os.path.splitext(options.file)[-1].lower()
     if "overwrite" in options:
         over = " -y "
     with open(options.times, 'rb') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='|')
         for time in reader:
             if(time[0].strip()==""):continue
+	    #if(len(time) <= 2 or time[2].strip()==""):
+	    #    length = options.length
+	    #else:
+		#length = time[2]
             if re.match("\d{1,2}:\d{1,2}:\d{1,2}",time[1]):
                 print "extracting match "+time[0]+", starting at "+time[1]
-                call("ffmpeg "+over+"-ss "+time[1]+" -t "+options.length+" -i "+options.file+" -vcodec copy -acodec copy ./matches/"+time[0]+ext,shell=True)
+		cmd = "ffmpeg "+over+"-i "+options.file+" -ss "+time[1]+" -t "+options.length+" -vcodec mpeg4 -acodec copy ./matches/"+time[0]+ext
+		print cmd
+                call(cmd,shell=True)
                 videos.append(time[0]+ext)
     return videos
     
+def get_videos(options):
+	videos = []
+	with open(options.times, 'rb') as csvfile:
+		reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+		for time in reader:
+			videos.append(time[0]+".mp4")
+	return videos
+
 
 if __name__ == '__main__':
     #argparser = argparse.ArgumentParser(description='Extract matches from an input video file and upload them to youtube')
@@ -210,9 +250,14 @@ if __name__ == '__main__':
     argparser.add_argument("-t","--times", required=True, help="CSV file of match info, one match per line - formatted tba_match_key,hh:mm:ss")
     argparser.add_argument("-l","--length",dest="length",default="00:03:00",help="Length of video to cut out after the start point. Defaults to 3 minutes")
     argparser.add_argument("--skip-upload",action="store_true",dest="skip",default="false",help="doesn't upload videos to YouTube, only extracts them")
+    argparser.add_argument("-u","--upload",action="store_true",dest="upload",default="false",help="doesn't cut matches, only uploads")
     argparser.add_argument("--force-auth",action="store_true",dest="reauth",default="false",help="force authentication with YouTube API")
     argparser.add_argument("-y","--overwrite",action="store_true", dest="overwrite",help="Overwrite videos? Runs ffmpeg with -y flag")
+    argparser.add_argument("-p","--playlist",dest="playlist",help="Adds video to given playlist ID")
+    argparser.add_argument("-d","--description",dest="desc",default="",help="Text to add to the youtube video description when uploading"
     args = argparser.parse_args()
+
+    print "running"
 
     if not os.path.exists(args.file):
         exit("Please specify a valid video file using the --file parameter.")
@@ -220,11 +265,15 @@ if __name__ == '__main__':
     if not os.path.exists(args.times):
         exit("Please specify a valid video data file using the --times parameter.")
 
-    videos = split_video(args)
+    if(args.upload=="false"):
+        videos = split_video(args)
+    else:
+        print "getting videos"
+        videos = get_videos(args)
     if(args.skip=="false"):
         youtube = get_authenticated_service(args)
         try:
-            initialize_upload(youtube, videos)
+            initialize_upload(youtube, videos,args)
         except HttpError, e:
             print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
 
