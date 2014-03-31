@@ -63,35 +63,6 @@ def get_authenticated_service():
   return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
     http=credentials.authorize(httplib2.Http()))
 
-
-def youtube_search(options):
-  youtube = get_authenticated_service()
-
-  search_response = youtube.search().list(
-    q="meow",
-    part="id,snippet",
-    maxResults=3
-  ).execute()
-
-  videos = []
-  channels = []
-  playlists = []
-
-  for search_result in search_response.get("items", []):
-    if search_result["id"]["kind"] == "youtube#video":
-      videos.append("%s (%s)" % (search_result["snippet"]["title"],
-                                 search_result["id"]["videoId"]))
-    elif search_result["id"]["kind"] == "youtube#channel":
-      channels.append("%s (%s)" % (search_result["snippet"]["title"],
-                                   search_result["id"]["channelId"]))
-    elif search_result["id"]["kind"] == "youtube#playlist":
-      playlists.append("%s (%s)" % (search_result["snippet"]["title"],
-                                    search_result["id"]["playlistId"]))
-
-  print "Videos:\n", "\n".join(videos), "\n"
-  print "Channels:\n", "\n".join(channels), "\n"
-  print "Playlists:\n", "\n".join(playlists), "\n"
-    
 def process_titles(titles,urls,options):
     eventKey = str(options.key)
     year = eventKey[:4]
@@ -100,14 +71,30 @@ def process_titles(titles,urls,options):
     matchNum=""
     p = re.compile("^\d")
     
-    with open('matches.csv', 'wb') as csvfile:
-        writer = csv.writer(csvfile, delimiter=' ',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+    if(options.output == ""):
+	#process a playlist
+	dataFile = options.key+"_matches.csv"
+    else:
+	#dump youtube data to file
+	dataFile = options.user+"_uploads.csv"
+
+    with open(dataFile, "a") as csvfile:
+        writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
         for title,url in zip(titles,urls):
-            print title
+            if(not options.output == ""):
+		#just write all the data to a file
+		writer.writerow([str(title),url])
+		continue
+
+	    #process the title and generate row for copy/paste into TBA spreadsheet
   	    expl = re.split("\s",title)
-            matchType = "q"
-	    matchNum = expl[1][2:4]
-	    writer.writerow([year,event,matchType,matchNum,"http://www.youtube.com/watch?v="+url])
+	    match = False
+	    if("Q-" in title):
+		matchType = "q"
+		matchNum = str(expl[0])[2:]
+	    if(True):
+	    	print title
+            	writer.writerow([year,event,matchType,matchNum,"http://www.youtube.com/watch?v="+url])
 
 def process_playlist(options):
     youtube = get_authenticated_service()
@@ -131,8 +118,7 @@ def process_playlist(options):
                 stop=True       
         for video in playlist.get("items", []):
             if video["kind"] == "youtube#playlistItem" and video["snippet"]["resourceId"]["kind"] == "youtube#video":
-                 video_data = youtube.videos().list(
-                                                    part='snippet',
+                 video_data = youtube.videos().list(part='snippet',
                                                     id=video["snippet"]["resourceId"]["videoId"]).execute()
                  for v in video_data.get("items",[]):
                      videos.append(video["snippet"]["resourceId"]["videoId"])
@@ -141,14 +127,29 @@ def process_playlist(options):
     print "Num: ",len(videos)
     process_titles(titles,videos,options)
 
+def get_upload_playlist(args):
+    youtube = get_authenticated_service()
+    channels_response = youtube.channels().list(part="contentDetails",forUsername=args.user).execute()
+    for channel in channels_response["items"]:
+  	# From the API response, extract the playlist ID that identifies the list
+  	# of videos uploaded to the authenticated user's channel.
+  	uploads_list_id = channel["contentDetails"]["relatedPlaylists"]["uploads"]
+    	print uploads_list_id
+    	return uploads_list_id
+    
+
 if __name__ == "__main__":
   parser = OptionParser()
-  parser.add_option("--playlist", dest="playlist",
-    help="ID of playlsit to parse")
-  parser.add_option("--key", dest="key",
-    help="Full TBA event key")
+  parser.add_option("--playlist", dest="playlist",help="ID of playlsit to parse")
+  parser.add_option("--user",dest="user",default="",help="Username to fetch all uploads for")
+  parser.add_option("--key", dest="key",help="Full TBA event key")
+  parser.add_option("--output",dest="output",help="csv file to output Youtube data to")
+  parser.add_option("--file",dest="file",help="csv file to use instead of querying YouTube over and over")
   (options, args) = parser.parse_args()
   
+  if(not options.user == ""):
+  	options.playlist = get_upload_playlist(options)
+
   process_playlist(options)
-  # youtube_search(options)
+
   
