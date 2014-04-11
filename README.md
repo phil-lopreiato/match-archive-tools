@@ -33,3 +33,7 @@ The script will output a CSV file in the same directory as the script that you c
     * You will have to create the playlist manually and copy down the ID
 
 The script will output a CSV file in the same directory as the script that you can open up, and copy/paste the data into the TBA [Archival Spreadsheet](https://docs.google.com/spreadsheet/ccc?key=0ApRO2Yzh2z01dExFZEdieV9WdTJsZ25HSWI3VUxsWGc#gid=1)
+
+Obtaining Video
+---------------
+The match_split script assumes that its video input is one big chunck of video consisting of multiple matches over lots of time. You can record the video yourself, or record webcasts you're watching using [livestreamer](http://livestreamer.readthedocs.org/en/latest/). Remember to use the -o option to write the video to a file.
