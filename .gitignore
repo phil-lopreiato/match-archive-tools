@@ -1,0 +1,6 @@
+*.pyc
+*.json
+*.json2
+*.csv
+
+api.conf
