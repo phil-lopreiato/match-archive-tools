@@ -254,7 +254,7 @@ if __name__ == '__main__':
     argparser.add_argument("--force-auth",action="store_true",dest="reauth",default="false",help="force authentication with YouTube API")
     argparser.add_argument("-y","--overwrite",action="store_true", dest="overwrite",help="Overwrite videos? Runs ffmpeg with -y flag")
     argparser.add_argument("-p","--playlist",dest="playlist",help="Adds video to given playlist ID")
-    argparser.add_argument("-d","--description",dest="desc",default="",help="Text to add to the youtube video description when uploading"
+    argparser.add_argument("-d","--description",dest="desc",default="",help="Text to add to the youtube video description when uploading")
     args = argparser.parse_args()
 
     print "running"
