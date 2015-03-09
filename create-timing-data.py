@@ -10,19 +10,21 @@ def tba_key_from_match(eventKey, matchDict):
     2015 game specific
     """
 
-    # Will be {Qualification, Quarterfinal, Semifinal, Finals} N
-    desc = matchDict['description'].split()
-    if desc[0] == "Qualification":
-        matchKey = "qm{}".format(desc[1])
-    elif desc[0] == "Quarterfinal":
-        matchKey = "qf1m{}".format(desc[1])
-    elif desc[0] == "Semifinal":
-        matchKey = "sf1m{}".format(desc[1])
-    elif desc[0] == "Finals":
-        matchKey = "f1m{}".format(desc[1])
+    level = matchDict['level']
+    matchNum = int(matchDict['matchNumber'])
+
+    if level == 'Qualification':
+        matchKey = 'qm{}'.format(matchNum)
+    elif level == 'Playoff':
+        if matchNum >= 1 and matchNum <= 8:
+            matchKey = 'qf1m{}'.format(matchNum)
+        elif matchNum >= 9 and matchNum <= 14:
+            matchKey = 'sf1m{}'.format(matchNum - 8)
+        else:
+            matchKey = 'f1m{}'.format(matchNum - 14)
     else:
-        print "Couldn't get TBA key from Description {}".format(matchDict['description'])
-    return "{}_{}".format(eventKey, matchKey)
+        print "Unable to get key from {} match {}".format(level, matchNum)
+    return matchKey
 
 
 def parse_api_data(eventKey, matchList):
